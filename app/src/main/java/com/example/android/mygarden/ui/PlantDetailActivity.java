@@ -18,6 +18,7 @@ package com.example.android.mygarden.ui;
 
 import android.content.ContentUris;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
@@ -25,6 +26,7 @@ import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -40,8 +42,10 @@ import static com.example.android.mygarden.provider.PlantContract.PATH_PLANTS;
 public class PlantDetailActivity extends AppCompatActivity
         implements LoaderManager.LoaderCallbacks<Cursor> {
 
+    private static final String TAG = PlantDetailActivity.class.getSimpleName();
     private static final int SINGLE_LOADER_ID = 200;
     public static final String EXTRA_PLANT_ID = "com.example.android.mygarden.extra.PLANT_ID";
+    public static final String EXTRA_PLANT_WIDGET_ID = "plant_id";
     long mPlantId;
 
     @Override
@@ -49,8 +53,17 @@ public class PlantDetailActivity extends AppCompatActivity
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_plant_detail);
         mPlantId = getIntent().getLongExtra(EXTRA_PLANT_ID, PlantContract.INVALID_PLANT_ID);
+
+        Intent intentThatCreatedThisActivity = getIntent();
+        if(intentThatCreatedThisActivity.hasExtra(EXTRA_PLANT_WIDGET_ID)) {
+            mPlantId = intentThatCreatedThisActivity.getLongExtra(EXTRA_PLANT_WIDGET_ID,
+                    PlantContract.INVALID_PLANT_ID);
+            Log.i(TAG, "onCreate: has Extra Plant Widget ID" + mPlantId);
+        }
+
         // This activity displays single plant information that is loaded using a cursor loader
         getSupportLoaderManager().initLoader(SINGLE_LOADER_ID, null, this);
+        Log.i(TAG, "onCreate: mPlantID = " + mPlantId);
     }
 
     public void onBackButtonClick(View view) {
@@ -58,23 +71,7 @@ public class PlantDetailActivity extends AppCompatActivity
     }
 
     public void onWaterButtonClick(View view) {
-        //check if already dead then can't water
-        Uri SINGLE_PLANT_URI = ContentUris.withAppendedId(
-                BASE_CONTENT_URI.buildUpon().appendPath(PATH_PLANTS).build(), mPlantId);
-        Cursor cursor = getContentResolver().query(SINGLE_PLANT_URI, null, null, null, null);
-        if (cursor == null || cursor.getCount() < 1) return; //can't find this plant!
-        cursor.moveToFirst();
-        long lastWatered = cursor.getLong(cursor.getColumnIndex(PlantContract.PlantEntry.COLUMN_LAST_WATERED_TIME));
-        long timeNow = System.currentTimeMillis();
-        if ((timeNow - lastWatered) > PlantUtils.MAX_AGE_WITHOUT_WATER)
-            return; // plant already dead
-
-        ContentValues contentValues = new ContentValues();
-        // Update the watered timestamp
-        contentValues.put(PlantContract.PlantEntry.COLUMN_LAST_WATERED_TIME, timeNow);
-        getContentResolver().update(SINGLE_PLANT_URI, contentValues, null, null);
-        cursor.close();
-        PlantWateringService.startActionUpdatePlantWidgets(this);
+        PlantWateringService.startActionWaterPlant(this, mPlantId);
     }
 
     @Override
@@ -88,6 +85,7 @@ public class PlantDetailActivity extends AppCompatActivity
     @Override
     public void onLoadFinished(Loader<Cursor> loader, Cursor cursor) {
         if (cursor == null || cursor.getCount() < 1) return;
+        Log.i(TAG, "onLoadFinished: CursorLoader has Data, Plant ID found!");
         cursor.moveToFirst();
         int createTimeIndex = cursor.getColumnIndex(PlantContract.PlantEntry.COLUMN_CREATION_TIME);
         int waterTimeIndex = cursor.getColumnIndex(PlantContract.PlantEntry.COLUMN_LAST_WATERED_TIME);
